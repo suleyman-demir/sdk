@@ -1,29 +1,88 @@
 package com.cargo.sdk;
 
-import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.List;
+import java.util.Arrays;
 
-@FeignClient(name = "cargo",url = "${cargo.url}")
-public interface CargoServiceClient {
+public class CargoServiceClient {
+    private final String baseUrl;
+    private final HttpClient httpClient;
+    private final ObjectMapper objectMapper;
 
-    @GetMapping("/cargos")
-    List<Cargo> getAllCargos();
+    public CargoServiceClient(String baseUrl) {
+        this.baseUrl = baseUrl;
+        this.httpClient = HttpClient.newHttpClient();
+        this.objectMapper = new ObjectMapper();
+    }
 
-    @GetMapping("/cargo/{id}")
-    Cargo getCargoById(@PathVariable("id") Long id);
+    public List<Cargo> getAllCargos() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/cargos"))
+                .GET()
+                .build();
 
-    @PostMapping("/add")
-    Cargo addCargo(@RequestBody Cargo cargo);
+        HttpResponse<String> response = httpClient.send(request, 
+            HttpResponse.BodyHandlers.ofString());
 
-    @PostMapping("setState/{id}")
-    Cargo setState(@PathVariable("id") Long id);
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("Failed to get cargos: " + response.statusCode());
+        }
 
+        return Arrays.asList(objectMapper.readValue(response.body(), Cargo[].class));
+    }
 
+    public Cargo getCargoById(Long id) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/cargo/" + id))
+                .GET()
+                .build();
 
+        HttpResponse<String> response = httpClient.send(request, 
+            HttpResponse.BodyHandlers.ofString());
 
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("Failed to get cargo: " + response.statusCode());
+        }
+
+        return objectMapper.readValue(response.body(), Cargo.class);
+    }
+
+    public Cargo addCargo(Cargo cargo) throws Exception {
+        String requestBody = objectMapper.writeValueAsString(cargo);
+        
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/add"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, 
+            HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("Failed to add cargo: " + response.statusCode());
+        }
+
+        return objectMapper.readValue(response.body(), Cargo.class);
+    }
+
+    public Cargo setState(Long id) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/setState/" + id))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, 
+            HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("Failed to set state: " + response.statusCode());
+        }
+
+        return objectMapper.readValue(response.body(), Cargo.class);
+    }
 }
